@@ -33,38 +33,46 @@ jobs:
           FILENAME: ${{ github.event.inputs.filename }}
         run: |
           python -c "
-          import os, urllib.request, json
+          import os, urllib.request, json, sys
 
-          api_key = os.getenv('DEEPSEEK_API_KEY')
-          prompt = os.getenv('PROMPT')
-          filename = os.getenv('FILENAME')
+          try:
+              api_key = os.getenv('DEEPSEEK_API_KEY')
+              prompt = os.getenv('PROMPT')
+              filename = os.getenv('FILENAME')
 
-          url = 'https://api.deepseek.com/v1/chat/completions'
-          headers = {
-              'Content-Type': 'application/json',
-              'Authorization': f'Bearer {api_key}'
-          }
-          data = {
-              'model': 'deepseek-chat',
-              'messages': [
-                  {'role': 'system', 'content': 'You are a senior backend engineer. Output ONLY clean, raw Python code with no markdown blocks or conversational wrapper text.'},
-                  {'role': 'user', 'content': prompt}
-              ],
-              'temperature': 0.1
-          }
+              if not api_key:
+                  print('ERROR: DEEPSEEK_API_KEY secret is missing.')
+                  sys.exit(1)
 
-          req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers=headers, method='POST')
-          with urllib.request.urlopen(req) as response:
-              res_json = json.loads(response.read().decode('utf-8'))
-              code_content = res_json['choices'][0]['message']['content']
+              url = 'https://api.deepseek.com/v1/chat/completions'
+              headers = {
+                  'Content-Type': 'application/json',
+                  'Authorization': f'Bearer {api_key}'
+              }
+              data = {
+                  'model': 'deepseek-chat',
+                  'messages': [
+                      {'role': 'system', 'content': 'You are a senior backend engineer. Output ONLY clean, raw Python code with no markdown blocks or conversational wrapper text.'},
+                      {'role': 'user', 'content': prompt}
+                  ],
+                  'temperature': 0.1
+              }
 
-          # Clean markdown code blocks if model included them
-          if code_content.startswith('```'):
-              code_content = '\n'.join(code_content.splitlines()[1:-1])
+              req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers=headers, method='POST')
+              with urllib.request.urlopen(req) as response:
+                  res_json = json.loads(response.read().decode('utf-8'))
+                  code_content = res_json['choices'][0]['message']['content']
 
-          with open(filename, 'w', encoding='utf-8') as f:
-              f.write(code_content)
-          print(f'Successfully generated and wrote {filename}')
+              if code_content.startswith('```'):
+                  lines = code_content.splitlines()
+                  code_content = '\n'.join(lines[1:-1] if lines[-1].startswith('```') else lines[1:])
+
+              with open(filename, 'w', encoding='utf-8') as f:
+                  f.write(code_content)
+              print(f'Successfully generated and wrote {filename}')
+          except Exception as e:
+              print(f'CRITICAL EXCEPTION: {e}')
+              sys.exit(1)
           "
 
       - name: Commit and Push File
@@ -72,5 +80,5 @@ jobs:
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           git add ${{ github.event.inputs.filename }}
-          git commit -m "Auto-generated ${{ github.event.inputs.filename }} via DeepSeek Bridge"
+          git commit -m "Auto-generated ${{ github.event.inputs.filename }} via DeepSeek Bridge" || echo "No changes to commit"
           git push
