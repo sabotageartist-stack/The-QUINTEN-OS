@@ -1,3 +1,4 @@
+
 name: DeepSeek Code Generator Bridge
 
 on:
@@ -26,14 +27,13 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Call DeepSeek API & Write File
-        env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          PROMPT: ${{ github.event.inputs.prompt }}
-          FILENAME: ${{ github.event.inputs.filename }}
+      - name: Create Generator Script
         run: |
-          python -c "
-          import os, urllib.request, json, sys
+          cat << 'EOF' > generator.py
+          import os
+          import sys
+          import json
+          import urllib.request
 
           try:
               api_key = os.getenv('DEEPSEEK_API_KEY')
@@ -73,10 +73,15 @@ jobs:
           except Exception as e:
               print(f'CRITICAL EXCEPTION: {e}')
               sys.exit(1)
-          "
+          EOF
 
-      - name: Commit and Push File
+      - name: Run Generator & Commit
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          PROMPT: ${{ github.event.inputs.prompt }}
+          FILENAME: ${{ github.event.inputs.filename }}
         run: |
+          python generator.py
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           git add ${{ github.event.inputs.filename }}
